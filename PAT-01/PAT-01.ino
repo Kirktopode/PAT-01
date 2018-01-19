@@ -1,29 +1,28 @@
-#include "Wire.h"
-#include "I2Cdev.h"
-#include "MPU9250.h"
-#include <math.h>
-#include <JVector.h>
+#include "Wire.h" //Used to communicate to the IMU (Accelerometer, gyroscope and magnetometer)
+#include "I2Cdev.h" //Helps with the above
+#include "MPU9250.h" //Contains a library of functions that streamline communication with the IMU
 
-const int LTRN = 5;
-const int RTRN = 16;
-const int FWRD = 15;
-const int BWRD = 14;
-const int BUTTON = 7;
-//const int LED = 17;
+#include <math.h> //For math (trig functions)
+#include <JVector.h> //home-made library for basic 3D vectors. We only use 2 dimensions of it.
 
-const float MPS = 1.651;
+const int LTRN = 5; //Left turn pin
+const int RTRN = 16; //Right turn pin --if both turn pins are HIGH, no turn is made.
+const int FWRD = 15; //Forward throttle pin
+const int BWRD = 14; //Reverse throttle pin --if both pins are HIGH, no turn is made.
+const int BUTTON = 7; //Button pin --for various steps forward in the robot's state
+//const int LED = 17; //Commented out because use of this pin interferes with serial communication.
+//Not removed because we may want indicator lights at another stage in development.
 
-int32_t mx_min = 32766, mx_max = -32766, mx_bias;
-int32_t my_min = 32766, my_max = -32766, my_bias;
-int32_t mz_min = 32766, mz_max = -32766, mz_bias;
+const float MPS = 1.651; //A decent estimate for the robot's average speed over 1.5 seconds of operation.
+//With an odometer, we can compute movement much more effectively, but that will have to wait.
 
-int32_t cal_min, cal_max;
 
-MPU9250 mag;
-I2Cdev I2C_M;
+
+MPU9250 mag; //Object used to communicate with the IMU
+I2Cdev I2C_M; //Object used to initiate I2C communication protocol
 
 enum ThrottleState{
-  FORWARD, REVERSE, STILL
+  FORWARD, REVERSE, STILL //symbolic constants used to store whether the robot is moving forward, back, or not at all.
 };
 
 void setup() {
@@ -39,56 +38,85 @@ void setup() {
   Wire.begin();
   mag.initialize();
 
-  Serial.begin(9600);
+  Serial.begin(9600); //We initiate Serial communication for logging purposes.
 }
 
-float heading, desiredHeading;
-int wpIndex = 1;
-float headingChange;
-const int WP_LENGTH = 5;
-const float DEADBAND = 15; //degree range for acceptable forward heading.
-unsigned long startTime;
-ThrottleState throttle = STILL;
-JVector pos(0,0);
 
+const int WP_LENGTH = 5; //Length of the list of waypoints.
+const float DEADBAND = 15; //degree range for acceptable forward heading.
+//We use a deadband because the steering is only capable of three settings, unlike hobby-grade cars.
+
+int32_t mx_min = 32766, mx_max = -32766, mx_bias; //these values are used for magnetometer calibration.
+int32_t my_min = 32766, my_max = -32766, my_bias;
+int32_t mz_min = 32766, mz_max = -32766, mz_bias;
+
+int32_t cal_min, cal_max;
+
+float heading, desiredHeading, headingChange;
+int wpIndex = 1; //current index in the waypoints array
+unsigned long startTime; //stored in milliseconds and changed with button presses.
+ThrottleState throttle = STILL; //current throttle state, beginning at STILL
+JVector pos(0,0); //current location, beginning at the origin.
+
+//array of waypoints that the robot will travel to. This is not fully implemented.
 JVector waypoints[] = {JVector(0,0), JVector(10, 0), JVector(10,10), JVector(0,10), JVector(0,0)};
 
+//steerLeft() directs the robot to turn left. It is best to use this rather than
+//using digitalWrite() in order to avoid control errors.
 void steerLeft(){
   digitalWrite(RTRN, LOW);
   digitalWrite(LTRN, HIGH);
 }
 
+//steerRight() directs the robot to turn right. It is best to use this rather than
+//using digitalWrite() in order to avoid control errors.
 void steerRight(){
   digitalWrite(RTRN, HIGH);
   digitalWrite(LTRN, LOW);
 }
 
+//steerStraight() directs the robot to turn neither left nor right. It is best to use this rather than
+//using digitalWrite() in order to avoid control errors.
 void steerStraight(){
   digitalWrite(RTRN, LOW);
   digitalWrite(LTRN, LOW);
 }
 
+//motorForward() directs the throttle forward and updates the throttle variable.
 void motorForward(){
   digitalWrite(FWRD, HIGH);
   digitalWrite(BWRD, LOW);
   throttle = FORWARD;
 }
 
+//motorBack() directs the throttle backward and updates the throttle variable.
 void motorBack(){
   digitalWrite(FWRD, LOW);
   digitalWrite(BWRD, HIGH);
   throttle = REVERSE;
 }
 
+//motorForward() directs the throttle to cease and updates the throttle variable.
 void motorStop(){
   digitalWrite(FWRD, LOW);
   digitalWrite(BWRD, LOW);
   throttle = STILL;
 }
 
+/*calibrateMag() carries the robot through the calibration sequence. There are three steps
+ * to this process, as the robot must be able to account for any direction of steering. When the
+ * robot is in a turn, the steering motor is stalled, causing it to draw more current than a
+ * turning motor. This causes it to act like a fairly weak electromagnet. While this isn't
+ * enough to cause visible changes, it does interfere with the magnetometer's readings.
+ * 
+ * The calibration process corrects the error inherent in the magnetometer due to temperature, nearby
+ * ferrous metals, and magnetic fields. For the time being, calibration will occur every startup.
+ * If it becomes more convenient, we may hard-code calibration values into the robot when it has
+ * achieved a more stable state.
+ */
 void calibrateMag(){
-  int16_t ax, ay,az, gx, gy, gz, mx, my, mz;
-//  digitalWrite(LED, LOW);
+  int16_t ax, ay,az, gx, gy, gz, mx, my, mz; //variables for all three of the IMU's 3-axis sensors
+  //Currently, the robot gathers all three forms of data in case they will be used later.
   while(digitalRead(BUTTON) == LOW){
     steerLeft();
     mag.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
@@ -190,10 +218,17 @@ void calibrateMag(){
   mz_min -= mz_bias;
   mz_max -= mz_bias;
 
-  cal_min = (mx_min + my_min + mz_min) / 2;
-  cal_max = (mx_max + my_max + mz_max) / 2;
+  cal_min = (mx_min + my_min + mz_min) / 3;
+  cal_max = (mx_max + my_max + mz_max) / 3;
 }
 
+/*
+ * navigate() uses all of the data at its disposal to find the robot's current heading and position.
+ * For heading, it uses magnetometer data and the arctangent function. For position, it multiplies the robot's speed
+ * per millisecond (represented by MPS / 1000) by the milliseconds passed since the last call of navigate().
+ * 
+ * In addition, navigate() logs sensor data for use in debugging.
+ */
 void navigate(){
   int16_t ax, ay,az, gx, gy, gz, mx, my, mz;
   mag.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
@@ -202,9 +237,9 @@ void navigate(){
   heading = atan2(-my_adjusted,mx_adjusted) * 180 / PI - 180;
   while(heading < 0) heading += 360;
   if(throttle == FORWARD){
-    pos += JVector(MPS*sin(heading),MPS*cos(heading));
+    pos += JVector((MPS / 1000) * sin(heading),(MPS / 1000) * cos(heading)); //TODO: fix this so that millis() passed is taken into account
   }else if(throttle == REVERSE){
-    pos -= JVector(MPS*sin(heading),MPS*cos(heading));
+    pos -= JVector((MPS / 1000) * sin(heading),(MPS / 1000) * cos(heading)); //TODO: fix this so that millis() passed is taken into account
   }
   
   Serial.print(mx);
@@ -231,14 +266,21 @@ void navigate(){
   Serial.print(", ");
   Serial.print(mz_bias);
   Serial.print(", ");
-  //Serial.print(desiredHeadings[hIndex]);
-  //Serial.print(", ");
   Serial.print(heading);
 }
 
+
+/*
+ * guide() takes into account the robot's current position, the next waypoint, and the previous waypoint.
+ * It then calculates the necessary change in heading so that control() can react appropriately.
+ * In the final version, guide() will also decide whether or not the robot has passed the current waypoint.
+ * 
+ * In previous iterations and test versions, guide() was solely used to maintain the robot's course or verify
+ * its ability to steer in a particular magnetic direction.
+ */
 void guide(){
 
-  
+  //TODO: update code to compute headingChange based upon 
   
   if(headingChange > 180) headingChange -= 360;
   if(headingChange < -180) headingChange += 360;
@@ -246,8 +288,9 @@ void guide(){
   Serial.println(headingChange);
 }
 
-//340 - 0 is 340 (left turn)
-//160 - 180 is -20 (left turn)
+/*
+ * control() turns left or right if appropriate, and stops if the robot has reached its final destination.
+ */
 
 void control(){
   if(millis() - startTime >= 3000){
@@ -259,29 +302,21 @@ void control(){
       }
     }
   }else{
+    motorForward();
     if(wpIndex >= WP_LENGTH){
-      digitalWrite(FWRD, LOW);
-      digitalWrite(RTRN, LOW);
-      digitalWrite(LTRN, LOW);
+      steerStraight();
+      motorStop();
       while(true){
       }
     }else if(abs(headingChange) >= DEADBAND / 2){
       //Time to TURN
-      digitalWrite(FWRD, HIGH);
       if(headingChange < 0){
-        digitalWrite(LTRN, HIGH);
-        digitalWrite(RTRN, LOW);
+        steerLeft();
       }else{
-        digitalWrite(LTRN, LOW);
-        digitalWrite(RTRN, HIGH);
+        steerRight();
       }
     }else{
-      digitalWrite(LTRN, LOW);
-      digitalWrite(RTRN, LOW);
-  //    digitalWrite(LED, LOW);
-  //    delay(500); //Wait a discernible amount of time
-  //    digitalWrite(LED, HIGH);
-  //    hIndex++;
+      steerStraight();
     }
   }
 }

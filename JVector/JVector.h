@@ -32,6 +32,12 @@ class JVector {
     JVector cross(JVector other);
     float dot(JVector other);
     float norm();
+    float getX();
+    float getY();
+    float getZ();
+    void setX(float x);
+    void setY(float x);
+    void setZ(float x);
     void print();
 };
 

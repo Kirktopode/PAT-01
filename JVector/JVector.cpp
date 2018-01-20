@@ -64,3 +64,22 @@ float JVector::norm(){
 void JVector::print(){
   printf("(%.2f, %.2f, %.2f)\n", x, y, z);
 }
+
+float JVector::getX(){
+  return x;
+}
+float JVector::getY(){
+  return y;
+}
+float JVector::getZ(){
+  return z;
+}
+void JVector::setX(float Lx){
+  x = Lx;
+}
+void JVector::setY(float Ly){
+  y = Ly;
+}
+void JVector::setZ(float Lz){
+  z = Lz;
+}

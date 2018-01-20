@@ -301,10 +301,28 @@ void navigate(){
  */
 void guide(){
 
-  //TODO: update code to compute headingChange based upon 
+  //Have I passed the previous waypoint?
+
+  float dotProduct = (waypoints[wpIndex] - waypoints[wpIndex - 1]).dot(wayoints[wpIndex] - pos);
+  if(dotProduct <= 0.0){
+    wpIndex++;
+  }
   
-  if(headingChange > 180) headingChange -= 360;
-  if(headingChange < -180) headingChange += 360;
+  //compute headingChange based upon pos and the next waypoint
+
+  if(wpIndex >= WP_LENGTH){
+    //If waypoints have all been reached, send an impossible heading change to control
+    headingChange = -999.0;
+  }else{
+    desiredHeading = atan2( waypoints[wpIndex].getX() - pos.getX() , waypoints[wpIndex].getY() - pos.getY()) * 180 / PI;
+    while(desiredHeading < 0) desiredHeading += 360;
+  
+    headingChange = desiredHeading - heading;
+    
+    if(headingChange > 180) headingChange -= 360;
+    if(headingChange < -180) headingChange += 360;
+  }
+  
   Serial.print(", ");
   Serial.println(headingChange);
 }
@@ -321,7 +339,7 @@ void control(){
     }
   }else{
     motorForward();
-    if(wpIndex >= WP_LENGTH){
+    if(headingChange < 200){
       steerStraight();
       motorStop();
       while(true){

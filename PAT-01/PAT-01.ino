@@ -251,10 +251,11 @@ void navigate(){
   int16_t my_adjusted = map(my - my_bias, my_min, my_max, cal_min, cal_max);
   heading = atan2(-my_adjusted,mx_adjusted) * 180 / PI - 180;
   while(heading < 0) heading += 360;
+  JVector addVector(((float)intervalTime * MPS / 1000.0) * sin(heading * PI / 180.0),((float)intervalTime * MPS / 1000.0) * cos((float)heading * PI / 180.0));
   if(throttle == FORWARD){
-    pos += JVector((intervalTime * MPS / 1000) * sin(heading),(intervalTime * MPS / 1000) * cos(heading));
+    pos += addVector;
   }else if(throttle == REVERSE){
-    pos -= JVector((intervalTime * MPS / 1000) * sin(heading),(intervalTime * MPS / 1000) * cos(heading));
+    pos -= addVector;
   }
   
   Serial.print(mx);
@@ -262,6 +263,12 @@ void navigate(){
   Serial.print(my);
   Serial.print(", ");
   Serial.print(mz);
+  Serial.print(", ");
+  Serial.print(intervalTime);
+  Serial.print(", ");
+  Serial.print(addVector.getX());
+  Serial.print(", ");
+  Serial.print(addVector.getY());
   Serial.print(", ");
   Serial.print(pos.getX());
   Serial.print(", ");
@@ -324,6 +331,8 @@ void guide(){
   }
   
   Serial.print(", ");
+  Serial.print(desiredHeading);
+  Serial.print(", ");
   Serial.println(headingChange);
 }
 
@@ -332,14 +341,14 @@ void guide(){
  */
 
 void control(){
-  if(killSwitch){
+  if(killSwitch()){
     motorStop();
     while(killSwitch()){
       epochTime = millis();
     }
   }else{
     motorForward();
-    if(headingChange < 200){
+    if(headingChange < -900){
       steerStraight();
       motorStop();
       while(true){

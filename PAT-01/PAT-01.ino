@@ -54,7 +54,7 @@ int32_t cal_min, cal_max;
 
 float heading, desiredHeading, headingChange;
 int wpIndex = 1; //current index in the waypoints array
-unsigned long startTime; //stored in milliseconds and changed with button presses.
+unsigned long epochTime; //stored in milliseconds and changed with button presses.
 ThrottleState throttle = STILL; //current throttle state, beginning at STILL
 JVector pos(0,0); //current location, beginning at the origin.
 
@@ -101,6 +101,17 @@ void motorStop(){
   digitalWrite(FWRD, LOW);
   digitalWrite(BWRD, LOW);
   throttle = STILL;
+}
+
+/*
+ * killSwitch checks whether or not a kill switch signal has been given. The code will stop if the kill
+ * switch has been thrown.
+ * 
+ * Note: we haven't looked at the actual hookup for the killswitch yet, but are expecting to use a bluetooth
+ * connection to implement this when wireless logging is added.
+ */
+bool killSwitch(){
+  return false;
 }
 
 /*calibrateMag() carries the robot through the calibration sequence. There are three steps
@@ -204,7 +215,7 @@ void calibrateMag(){
     Serial.println(mz_min);
   }
   delay(50);
-  startTime = millis();
+  epochTime = millis();
 //  digitalWrite(LED, HIGH);
   
   mx_bias = (mx_min + mx_max) / 2;
@@ -230,16 +241,20 @@ void calibrateMag(){
  * In addition, navigate() logs sensor data for use in debugging.
  */
 void navigate(){
-  int16_t ax, ay,az, gx, gy, gz, mx, my, mz;
+  unsigned long lastTime = epochTime;
+  epochTime = millis();
+  unsigned long intervalTime = epochTime - lastTime;
+  
+  int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
   mag.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
   int16_t mx_adjusted = map(mx - mx_bias, mx_min, mx_max, cal_min, cal_max);
   int16_t my_adjusted = map(my - my_bias, my_min, my_max, cal_min, cal_max);
   heading = atan2(-my_adjusted,mx_adjusted) * 180 / PI - 180;
   while(heading < 0) heading += 360;
   if(throttle == FORWARD){
-    pos += JVector((MPS / 1000) * sin(heading),(MPS / 1000) * cos(heading)); //TODO: fix this so that millis() passed is taken into account
+    pos += JVector((intervalTime * MPS / 1000) * sin(heading),(intervalTime * MPS / 1000) * cos(heading));
   }else if(throttle == REVERSE){
-    pos -= JVector((MPS / 1000) * sin(heading),(MPS / 1000) * cos(heading)); //TODO: fix this so that millis() passed is taken into account
+    pos -= JVector((intervalTime * MPS / 1000) * sin(heading),(intervalTime * MPS / 1000) * cos(heading));
   }
   
   Serial.print(mx);
@@ -293,13 +308,10 @@ void guide(){
  */
 
 void control(){
-  if(millis() - startTime >= 3000){
-    digitalWrite(FWRD, LOW);
-    if(digitalRead(BUTTON) == HIGH){
-      while(digitalRead(BUTTON)==HIGH){
-        delay(10);
-        startTime = millis();
-      }
+  if(killSwitch){
+    motorStop();
+    while(killSwitch()){
+      epochTime = millis();
     }
   }else{
     motorForward();

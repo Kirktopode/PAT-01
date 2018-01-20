@@ -1,4 +1,5 @@
-#include "JVector.h"
+
+#include "JVector/JVector.h"
 #include <stdio.h>
 #include <cmath>
 
@@ -39,3 +40,4 @@ int main(){
   
   return 0;
 }
+

@@ -303,7 +303,7 @@ void guide(){
 
   //Have I passed the previous waypoint?
 
-  float dotProduct = (waypoints[wpIndex] - waypoints[wpIndex - 1]).dot(wayoints[wpIndex] - pos);
+  float dotProduct = (waypoints[wpIndex] - waypoints[wpIndex - 1]).dot(waypoints[wpIndex] - pos);
   if(dotProduct <= 0.0){
     wpIndex++;
   }

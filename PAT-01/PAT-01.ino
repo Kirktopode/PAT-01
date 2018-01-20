@@ -263,11 +263,11 @@ void navigate(){
   Serial.print(", ");
   Serial.print(mz);
   Serial.print(", ");
-  Serial.print(pos.getX);
+  Serial.print(pos.getX());
   Serial.print(", ");
-  Serial.print(pos.getY);
+  Serial.print(pos.getY());
   Serial.print(", ");
-  Serial.print(pos.getZ);
+  Serial.print(pos.getZ());
   Serial.print(", ");
   Serial.print(mx_max);
   Serial.print(", ");

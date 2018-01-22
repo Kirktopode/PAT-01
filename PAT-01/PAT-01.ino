@@ -286,9 +286,15 @@ void navigate(){
   unsigned long lastTime = epochTime;
   epochTime = millis();
   unsigned long intervalTime = epochTime - lastTime;
+
+  
+  Serial.print(halfTurns);
+  Serial.print(", ");
+  Serial.print(lastTurns);
+  Serial.print(", ");
   
   unsigned long intervalTurns = halfTurns - lastTurns;
-  unsigned long lastTurns = halfTurns;
+  lastTurns = halfTurns;
   
   int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
   mag.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
@@ -306,14 +312,12 @@ void navigate(){
     pos -= addVector;
   }
   
-  Serial.print(halfTurns);
+  Serial.print(intervalTurns);
   Serial.print(", ");
   Serial.print(digitalRead(ODOMETER_DIGITAL));
   Serial.print(", ");
   Serial.print(analogRead(ODOMETER_ANALOG));
-  Serial.print(", ");
-  Serial.print(odometerMidpoint);
-  Serial.print(", ");
+  Serial.print(", "); 
   Serial.print(mx);
   Serial.print(", ");
   Serial.print(my);

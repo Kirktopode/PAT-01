@@ -9,7 +9,9 @@ const int LTRN = 5; //Left turn pin
 const int RTRN = 16; //Right turn pin --if both turn pins are HIGH, no turn is made.
 const int FWRD = 15; //Forward throttle pin
 const int BWRD = 14; //Reverse throttle pin --if both pins are HIGH, no turn is made.
-const int BUTTON = 7; //Button pin --for various steps forward in the robot's state
+const int BUTTON = 6; //Button pin --for various steps forward in the robot's state
+const int ODOMETER_DIGITAL = 8; //Pin to be used to attach the interrupt for the odometer.
+const int ODOMETER_ANALOG = A2;
 //const int LED = 17; //Commented out because use of this pin interferes with serial communication.
 //Not removed because we may want indicator lights at another stage in development.
 
@@ -26,7 +28,12 @@ enum ThrottleState{
 };
 
 void setup() {
-  // put your setup code here, to run once:
+
+  //Setting up timer interrupt
+  cli();
+  OCR0A = 0xAF;
+  TIMSK0 |= _BV(OCIE0A);
+  sei();
 
   pinMode(LTRN, OUTPUT);
   pinMode(RTRN, OUTPUT);
@@ -34,7 +41,9 @@ void setup() {
   pinMode(BWRD, OUTPUT);
 //  pinMode(LED, OUTPUT);
   pinMode(BUTTON, INPUT);
-
+  pinMode(ODOMETER_ANALOG,INPUT);
+  //Commenting this out because it doesn't work, but does illustrate interrupts pretty well.
+  //attachInterrupt(digitalPinToInterrupt(ODOMETER_INTERRUPT_PIN), odometer, RISING);
   Wire.begin();
   mag.initialize();
 
@@ -45,7 +54,13 @@ void setup() {
 const int WP_LENGTH = 5; //Length of the list of waypoints.
 const float DEADBAND = 15; //degree range for acceptable forward heading.
 //We use a deadband because the steering is only capable of three settings, unlike hobby-grade cars.
+const uint16_t UPPER_THRESHOLD = 700; //thresholds used for the odometer
+const uint16_t LOWER_THRESHOLD = 300;
 
+const float WHEEL_CIRC_CM = 4.49 * PI;
+
+unsigned long odometerTime = 0;//used for odometer timing
+uint16_t odometerMidpoint = 0; //used to identify the midpoint on the odometer
 int32_t mx_min = 32766, mx_max = -32766, mx_bias; //these values are used for magnetometer calibration.
 int32_t my_min = 32766, my_max = -32766, my_bias;
 int32_t mz_min = 32766, mz_max = -32766, mz_bias;
@@ -55,11 +70,36 @@ int32_t cal_min, cal_max;
 float heading, desiredHeading, headingChange;
 int wpIndex = 1; //current index in the waypoints array
 unsigned long epochTime; //stored in milliseconds and changed with button presses.
+unsigned long halfTurns = 0; //updated via interrupt
+unsigned long lastTurns = 0; //holds the previous value for navigate updates
+uint16_t threshold = UPPER_THRESHOLD;
 ThrottleState throttle = STILL; //current throttle state, beginning at STILL
 JVector pos(0,0); //current location, beginning at the origin.
 
 //array of waypoints that the robot will travel to. This is not fully implemented.
 JVector waypoints[] = {JVector(0,0), JVector(10, 0), JVector(10,10), JVector(0,10), JVector(0,0)};
+
+/*
+ * This interrupt fires every millisecond, polling the current state of the odometer.
+ * If the odometer's analog signal is above the threshold, the following happens:
+ * 1. halfWheelCount is incremented
+ * 2. The threshold is decreased to a lower set threshold. This grants us some immunity to
+ *    noise, as the analog signal rises and lowers on a jagged path when the sensor looks 
+ *    over the encoder
+ * 3. If the odometer's analog signal is decreased below the lowered threshold, the threshold
+ *    is raised and halfWheelCount will be incremented again.
+ */
+SIGNAL(TIMER0_COMPA_vect){
+  uint16_t analog = analogRead(ODOMETER_ANALOG);
+  if(threshold == UPPER_THRESHOLD && analog > UPPER_THRESHOLD){
+    threshold = LOWER_THRESHOLD;
+    halfTurns++;
+  }else if(threshold == LOWER_THRESHOLD && analog < LOWER_THRESHOLD){
+    threshold = UPPER_THRESHOLD;
+    halfTurns++;
+  }
+  
+}
 
 //steerLeft() directs the robot to turn left. It is best to use this rather than
 //using digitalWrite() in order to avoid control errors.
@@ -241,9 +281,14 @@ void calibrateMag(){
  * In addition, navigate() logs sensor data for use in debugging.
  */
 void navigate(){
+  // We may not end up using time intervals, but we can hold on to it for now
+  // in case it becomes useful.
   unsigned long lastTime = epochTime;
   epochTime = millis();
   unsigned long intervalTime = epochTime - lastTime;
+  
+  unsigned long intervalTurns = halfTurns - lastTurns;
+  unsigned long lastTurns = halfTurns;
   
   int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
   mag.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
@@ -251,13 +296,24 @@ void navigate(){
   int16_t my_adjusted = map(my - my_bias, my_min, my_max, cal_min, cal_max);
   heading = atan2(-my_adjusted,mx_adjusted) * 180 / PI - 180;
   while(heading < 0) heading += 360;
-  JVector addVector(((float)intervalTime * MPS / 1000.0) * sin(heading * PI / 180.0),((float)intervalTime * MPS / 1000.0) * cos((float)heading * PI / 180.0));
+
+  JVector addVector(((float)intervalTurns * WHEEL_CIRC_CM / 200.0) * sin(heading * PI / 180.0),
+                    ((float)intervalTurns * WHEEL_CIRC_CM / 200.0) * cos(heading * PI / 180.0));
+  
   if(throttle == FORWARD){
     pos += addVector;
   }else if(throttle == REVERSE){
     pos -= addVector;
   }
   
+  Serial.print(halfTurns);
+  Serial.print(", ");
+  Serial.print(digitalRead(ODOMETER_DIGITAL));
+  Serial.print(", ");
+  Serial.print(analogRead(ODOMETER_ANALOG));
+  Serial.print(", ");
+  Serial.print(odometerMidpoint);
+  Serial.print(", ");
   Serial.print(mx);
   Serial.print(", ");
   Serial.print(my);

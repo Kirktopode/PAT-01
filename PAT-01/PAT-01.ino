@@ -5,13 +5,13 @@
 #include <math.h> //For math (trig functions)
 #include <JVector.h> //home-made library for basic 3D vectors. We only use 2 dimensions of it.
 
-const int LTRN = 5; //Left turn pin
-const int RTRN = 16; //Right turn pin --if both turn pins are HIGH, no turn is made.
-const int FWRD = 15; //Forward throttle pin
-const int BWRD = 14; //Reverse throttle pin --if both pins are HIGH, no turn is made.
-const int BUTTON = 6; //Button pin --for various steps forward in the robot's state
-const int ODOMETER_DIGITAL = 8; //Pin to be used to attach the interrupt for the odometer.
-const int ODOMETER_ANALOG = A2;
+const int LTRN = 3; //Left turn pin
+const int RTRN = A6; //Right turn pin --if both turn pins are HIGH, no turn is made.
+const int FWRD = 4; //Forward throttle pin
+const int BWRD = 11; //Reverse throttle pin --if both pins are HIGH, no turn is made.
+const int BUTTON = 12; //Button pin --for various steps forward in the robot's state
+const int ODOMETER_DIGITAL = 10; //Pin to be used to attach the interrupt for the odometer.
+const int ODOMETER_ANALOG = 13;
 //const int LED = 17; //Commented out because use of this pin interferes with serial communication.
 //Not removed because we may want indicator lights at another stage in development.
 
@@ -54,8 +54,8 @@ void setup() {
 const int WP_LENGTH = 5; //Length of the list of waypoints.
 const float DEADBAND = 15; //degree range for acceptable forward heading.
 //We use a deadband because the steering is only capable of three settings, unlike hobby-grade cars.
-const uint16_t UPPER_THRESHOLD = 700; //thresholds used for the odometer
-const uint16_t LOWER_THRESHOLD = 300;
+const uint16_t UPPER_THRESHOLD = 500; //thresholds used for the odometer
+const uint16_t LOWER_THRESHOLD = 200;
 
 const float WHEEL_CIRC_CM = 4.49 * PI;
 
@@ -77,7 +77,7 @@ ThrottleState throttle = STILL; //current throttle state, beginning at STILL
 JVector pos(0,0); //current location, beginning at the origin.
 
 //array of waypoints that the robot will travel to. This is not fully implemented.
-JVector waypoints[] = {JVector(0,0), JVector(10, 0), JVector(10,10), JVector(0,10), JVector(0,0)};
+JVector waypoints[] = {JVector(0,0), JVector(3, 0), JVector(3,3), JVector(0,3), JVector(0,0)};
 
 /*
  * This interrupt fires every millisecond, polling the current state of the odometer.
@@ -196,65 +196,8 @@ void calibrateMag(){
     Serial.print(", ");
     Serial.println(mz_min);
   }
-  delay(500);
-  while(digitalRead(BUTTON) == LOW){
-    steerRight();
-    mag.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
-    if(mx > mx_max) mx_max = mx;
-    if(mx < mx_min) mx_min = mx;
-    if(my > my_max) my_max = my;
-    if(my < my_min) my_min = my;
-    if(mz > mz_max) mz_max = mz;
-    if(mz < mz_min) mz_min = mz;
-    Serial.print("Right, ");
-    Serial.print(mx);
-    Serial.print(", ");
-    Serial.print(my);
-    Serial.print(", ");
-    Serial.print(mz);
-    Serial.print(", ");
-    Serial.print(mx_max);
-    Serial.print(", ");
-    Serial.print(my_max);
-    Serial.print(", ");
-    Serial.print(mz_max);
-    Serial.print(", ");
-    Serial.print(mx_min);
-    Serial.print(", ");
-    Serial.print(my_min);
-    Serial.print(", ");
-    Serial.println(mz_min);
-  }
-  delay(500);
-  while(digitalRead(BUTTON) == LOW){
-    steerStraight();
-    mag.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
-    if(mx > mx_max) mx_max = mx;
-    if(mx < mx_min) mx_min = mx;
-    if(my > my_max) my_max = my;
-    if(my < my_min) my_min = my;
-    if(mz > mz_max) mz_max = mz;
-    if(mz < mz_min) mz_min = mz;
-    Serial.print("Straight, ");
-    Serial.print(mx);
-    Serial.print(", ");
-    Serial.print(my);
-    Serial.print(", ");
-    Serial.print(mz);
-    Serial.print(", ");
-    Serial.print(mx_max);
-    Serial.print(", ");
-    Serial.print(my_max);
-    Serial.print(", ");
-    Serial.print(mz_max);
-    Serial.print(", ");
-    Serial.print(mx_min);
-    Serial.print(", ");
-    Serial.print(my_min);
-    Serial.print(", ");
-    Serial.println(mz_min);
-  }
   delay(50);
+  steerStraight();
   epochTime = millis();
 //  digitalWrite(LED, HIGH);
   
@@ -412,6 +355,14 @@ void control(){
       steerStraight();
       motorStop();
       while(true){
+        if(digitalRead(BUTTON) == true){
+          pos = JVector(0,0);
+          wpIndex = 1;
+          while(digitalRead(BUTTON) == true){
+            delay(500);
+          }
+          break;
+        }
       }
     }else if(abs(headingChange) >= DEADBAND / 2){
       //Time to TURN

@@ -11,7 +11,7 @@ const int FWRD = 4; //Forward throttle pin
 const int BWRD = 11; //Reverse throttle pin --if both pins are HIGH, no turn is made.
 const int BUTTON = 12; //Button pin --for various steps forward in the robot's state
 const int ODOMETER_DIGITAL = 10; //Pin to be used to attach the interrupt for the odometer.
-const int ODOMETER_ANALOG = 13;
+const int ODOMETER_ANALOG = A0;
 //const int LED = 17; //Commented out because use of this pin interferes with serial communication.
 //Not removed because we may want indicator lights at another stage in development.
 
@@ -230,12 +230,6 @@ void navigate(){
   epochTime = millis();
   unsigned long intervalTime = epochTime - lastTime;
 
-  
-  Serial.print(halfTurns);
-  Serial.print(", ");
-  Serial.print(lastTurns);
-  Serial.print(", ");
-  
   unsigned long intervalTurns = halfTurns - lastTurns;
   lastTurns = halfTurns;
   
@@ -254,48 +248,17 @@ void navigate(){
   }else if(throttle == REVERSE){
     pos -= addVector;
   }
-  
-  Serial.print(intervalTurns);
-  Serial.print(", ");
-  Serial.print(digitalRead(ODOMETER_DIGITAL));
-  Serial.print(", ");
   Serial.print(analogRead(ODOMETER_ANALOG));
   Serial.print(", "); 
   Serial.print(mx);
   Serial.print(", ");
   Serial.print(my);
   Serial.print(", ");
-  Serial.print(mz);
-  Serial.print(", ");
   Serial.print(intervalTime);
-  Serial.print(", ");
-  Serial.print(addVector.getX());
-  Serial.print(", ");
-  Serial.print(addVector.getY());
   Serial.print(", ");
   Serial.print(pos.getX());
   Serial.print(", ");
   Serial.print(pos.getY());
-  Serial.print(", ");
-  Serial.print(pos.getZ());
-  Serial.print(", ");
-  Serial.print(mx_max);
-  Serial.print(", ");
-  Serial.print(my_max);
-  Serial.print(", ");
-  Serial.print(mz_max);
-  Serial.print(", ");
-  Serial.print(mx_min);
-  Serial.print(", ");
-  Serial.print(my_min);
-  Serial.print(", ");
-  Serial.print(mz_min);
-  Serial.print(", ");
-  Serial.print(mx_bias);
-  Serial.print(", ");
-  Serial.print(my_bias);
-  Serial.print(", ");
-  Serial.print(mz_bias);
   Serial.print(", ");
   Serial.print(heading);
 }

@@ -6,6 +6,7 @@
 
 #include <math.h> //For math (trig functions)
 #include <JVector.h> //home-made library for basic 3D vectors. We only use 2 dimensions of it.
+#include <NewPing.h>
 
 const int LTRN = 3; //Left turn pin
 const int RTRN = A6; //Right turn pin --if both turn pins are HIGH, no turn is made.
@@ -263,6 +264,36 @@ void calibrateMag(){
   cal_max = (mx_max + my_max + mz_max) / 3;
 }
 
+
+const int V_BUFF_LEN = 100;
+int v_index = 0;
+float velocity = 0.0;
+int turns[V_BUFF_LEN];
+int ms[V_BUFF_LEN];
+
+int getVelocity(int t, long m){
+  if(v_index == V_BUFF_LEN){
+    v_index = 0;
+    int turns_total = 0;
+    int ms_total = 0;
+    for(int i = 0; i < V_BUFF_LEN; i++){
+      turns_total += turns[i];
+      ms_total += ms[i];
+    }
+    turns[v_index] = turns;
+    ms[v_index] = ms;
+    v_index++;
+    velocity = (float(turns_total) * (WHEEL_CIRC_CM / 2.0)) / (float(ms_total) / 100000);
+    return velocity;
+  }
+  else{
+    turns[v_index] = t;
+    ms[v_index] = m;
+    v_index++;
+    return velocity;
+  }
+}
+
 /*
  * navigate() uses all of the data at its disposal to find the robot's current heading and position.
  * For heading, it uses magnetometer data and the arctangent function. For position, it multiplies the robot's speed
@@ -279,6 +310,8 @@ void navigate(){
 
   unsigned long intervalTurns = halfTurns - lastTurns;
   lastTurns = halfTurns;
+
+  float v = getVelocity(intervalTurns, intervalTime);
   
   int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
   mag.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
@@ -357,7 +390,7 @@ float rightDist;
  */
 
 void detect(){
-  const float US_ROUNDTRIP_CM = 57.0;
+//  const float US_ROUNDTRIP_CM = 57.0;
   leftDist = sonarLeft.ping();
   centerDist = sonarCenter.ping();
   rightDist = sonarRight.ping();

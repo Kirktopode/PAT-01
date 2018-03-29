@@ -91,6 +91,9 @@ NewPing sonarLeft(TRIG_LEFT, ECHO_LEFT, MAX_DIST); //trig pin, echo pin
 NewPing sonarCenter(TRIG_CENTER, ECHO_CENTER, MAX_DIST);
 NewPing sonarRight(TRIG_RIGHT, ECHO_RIGHT, MAX_DIST);
 
+float leftDist;
+float centerDist;
+float rightDist;
 
 /*
  * setWP() sets the first waypoint to be 
@@ -295,6 +298,18 @@ int getVelocity(int t, long m){
 }
 
 /*
+ * displayMetrics() takes velocity and heading (usually within navigate() ) and displays this information,
+ * as well as the globally available object detection information, and displays it on the LCD screen.
+ */
+
+void displayMetrics(velocity, heading){
+  bool avoid = centerDist < TURN_DIST && centerDist != 0;
+
+  //JORDAN'S CODE HERE////////////////////////////////////////////////////////////////
+  
+}
+
+/*
  * navigate() uses all of the data at its disposal to find the robot's current heading and position.
  * For heading, it uses magnetometer data and the arctangent function. For position, it multiplies the robot's speed
  * per millisecond (represented by MPS / 1000) by the milliseconds passed since the last call of navigate().
@@ -312,6 +327,7 @@ void navigate(){
   lastTurns = halfTurns;
 
   float v = getVelocity(intervalTurns, intervalTime);
+
   
   int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
   mag.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
@@ -326,6 +342,9 @@ void navigate(){
   }else if(throttle == REVERSE){
     pos -= addVector;
   }
+
+  displayMetrics(v, heading);
+  
   Serial.print(analogRead(ODOMETER_ANALOG));
   Serial.print(", "); 
   Serial.print(mx);
@@ -380,9 +399,7 @@ void guide(){
   Serial.println(headingChange);
 }
 
-float leftDist;
-float centerDist;
-float rightDist;
+
 
 /*
  * detect() operates the sonar rangefinders and fills values for leftDist, centerDist and 

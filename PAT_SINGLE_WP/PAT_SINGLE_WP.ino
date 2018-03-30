@@ -20,7 +20,7 @@ const int WP_DIST = 2; //The distance out to the waypoint in meters
 
 const int TURN_DIST = 70; // Distance at which the robot will turn in centimeters
 
-MPU9250 mag; //Object used to communicate with the IMU
+MPU9250 mpu; //Object used to communicate with the IMU
 I2Cdev I2C_M; //Object used to initiate I2C communication protocol
 
 enum ThrottleState{
@@ -45,7 +45,7 @@ void setup() {
   //Commenting this out because it doesn't work, but does illustrate interrupts pretty well.
   //attachInterrupt(digitalPinToInterrupt(ODOMETER_INTERRUPT_PIN), odometer, RISING);
   Wire.begin();
-  mag.initialize();
+  mpu.initialize();
 
   Serial.begin(9600); //We initiate Serial communication for logging purposes.
 }
@@ -61,13 +61,8 @@ const float WHEEL_CIRC_CM = 4.49 * PI;
 
 unsigned long odometerTime = 0;//used for odometer timing
 uint16_t odometerMidpoint = 0; //used to identify the midpoint on the odometer
-int32_t mx_min = 32766, mx_max = -32766, mx_bias; //these values are used for magnetometer calibration.
-int32_t my_min = 32766, my_max = -32766, my_bias;
-int32_t mz_min = 32766, mz_max = -32766, mz_bias;
 
-int32_t cal_min, cal_max;
-
-float heading, desiredHeading, headingChange;
+float heading = 0.0, desiredHeading, headingChange;
 int wpIndex = 1; //current index in the waypoints array
 unsigned long epochTime; //stored in milliseconds and changed with button presses.
 unsigned long halfTurns = 0; //updated via interrupt
@@ -77,7 +72,7 @@ ThrottleState throttle = STILL; //current throttle state, beginning at STILL
 JVector pos(0,0); //current location, beginning at the origin.
 
 //array of waypoints that the robot will travel to. This is not fully implemented.
-JVector waypoints[] = {JVector(0,0), JVector(0, 0)};
+JVector waypoints[] = {JVector(0,0), JVector(0, 2)};
 
 const int TRIG_LEFT = 9;
 const int ECHO_LEFT = 8;
@@ -95,17 +90,7 @@ float leftDist;
 float centerDist;
 float rightDist;
 
-/*
- * setWP() sets the first waypoint to be 
- */
-void setWP(){
-  int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
-  mag.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
-  float sampleHeading = getHeading(mx, my);
-  JVector wp((float)WP_DIST * sin(sampleHeading * PI / 180.0),
-             (float)WP_DIST * cos(sampleHeading * PI / 180.0));
-  waypoints[1] = wp;
-}
+
 
 /*
  * This interrupt fires every millisecond, polling the current state of the odometer.
@@ -196,14 +181,8 @@ bool restartSwitch(){
   return received('r');
 }
 
-/*
- * getHeading() translates raw mx and my into a 0-360 degree heading.
- */
-float getHeading(int16_t mx, int16_t my){
-  int16_t mx_adjusted = map(mx - mx_bias, mx_min, mx_max, cal_min, cal_max);
-  int16_t my_adjusted = map(my - my_bias, my_min, my_max, cal_min, cal_max);
-  return atan2(-my_adjusted,mx_adjusted) * 180 / PI - 180;
-}
+int16_t gz_offset;
+const float ROTATION_CONSTANT = 131.2869444;
 
 /*calibrateMag() carries the robot through the calibration sequence. There are three steps
  * to this process, as the robot must be able to account for any direction of steering. When the
@@ -216,55 +195,27 @@ float getHeading(int16_t mx, int16_t my){
  * If it becomes more convenient, we may hard-code calibration values into the robot when it has
  * achieved a more stable state.
  */
-void calibrateMag(){
+void calibratempu(){
   int16_t ax, ay,az, gx, gy, gz, mx, my, mz; //variables for all three of the IMU's 3-axis sensors
   //Currently, the robot gathers all three forms of data in case they will be used later.
+  long gz_total = 0;
+  int gz_count = 0;
   while(digitalRead(BUTTON) == LOW){
-    steerLeft();
-    mag.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
-    if(mx > mx_max) mx_max = mx;
-    if(mx < mx_min) mx_min = mx;
-    if(my > my_max) my_max = my;
-    if(my < my_min) my_min = my;
-    if(mz > mz_max) mz_max = mz;
-    if(mz < mz_min) mz_min = mz;
-    Serial.print("Left, ");
-    Serial.print(mx);
+    mpu.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
+    gz_total += gz;
+    gz_count++;
+    gz_offset = gz_total / gz_count;
+    Serial.print(gz);
     Serial.print(", ");
-    Serial.print(my);
+    Serial.print(gz_offset);
     Serial.print(", ");
-    Serial.print(mz);
+    Serial.print(gz_total);
     Serial.print(", ");
-    Serial.print(mx_max);
-    Serial.print(", ");
-    Serial.print(my_max);
-    Serial.print(", ");
-    Serial.print(mz_max);
-    Serial.print(", ");
-    Serial.print(mx_min);
-    Serial.print(", ");
-    Serial.print(my_min);
-    Serial.print(", ");
-    Serial.println(mz_min);
+    Serial.println(gz_count);
   }
   delay(50);
   steerStraight();
   epochTime = millis();
-//  digitalWrite(LED, HIGH);
-  
-  mx_bias = (mx_min + mx_max) / 2;
-  my_bias = (my_min + my_max) / 2;
-  mz_bias = (mz_min + mz_max) / 2;
-
-  mx_min -= mx_bias;
-  mx_max -= mx_bias;
-  my_min -= my_bias;
-  my_max -= my_bias;
-  mz_min -= mz_bias;
-  mz_max -= mz_bias;
-
-  cal_min = (mx_min + my_min + mz_min) / 3;
-  cal_max = (mx_max + my_max + mz_max) / 3;
 }
 
 
@@ -302,7 +253,7 @@ int getVelocity(int t, long m){
  * as well as the globally available object detection information, and displays it on the LCD screen.
  */
 
-void displayMetrics(velocity, heading){
+void displayMetrics(float velocity, float heading){
   bool avoid = centerDist < TURN_DIST && centerDist != 0;
 
   //JORDAN'S CODE HERE////////////////////////////////////////////////////////////////
@@ -321,19 +272,23 @@ void navigate(){
   // in case it becomes useful.
   unsigned long lastTime = epochTime;
   epochTime = millis();
-  unsigned long intervalTime = epochTime - lastTime;
+  int intervalTime = epochTime - lastTime;
 
-  unsigned long intervalTurns = halfTurns - lastTurns;
+  int intervalTurns = halfTurns - lastTurns;
   lastTurns = halfTurns;
 
   float v = getVelocity(intervalTurns, intervalTime);
 
   
   int16_t ax, ay, az, gx, gy, gz, mx, my, mz;
-  mag.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
-  heading = getHeading(mx, my);
-  while(heading < 0) heading += 360;
+  mpu.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
 
+  long gz_corrected = gz - gz_offset;
+  
+  float rotation = (intervalTime * gz_corrected / (1000.0 * ROTATION_CONSTANT));
+  heading += rotation;
+  while(heading < 0) heading += 360;
+  while(heading > 360) heading -= 360;
   JVector addVector(((float)intervalTurns * WHEEL_CIRC_CM / 200.0) * sin(heading * PI / 180.0),
                     ((float)intervalTurns * WHEEL_CIRC_CM / 200.0) * cos(heading * PI / 180.0));
   
@@ -345,18 +300,16 @@ void navigate(){
 
   displayMetrics(v, heading);
   
-  Serial.print(analogRead(ODOMETER_ANALOG));
-  Serial.print(", "); 
-  Serial.print(mx);
-  Serial.print(", ");
-  Serial.print(my);
+  //Serial.print(analogRead(ODOMETER_ANALOG));
+  //Serial.print(", "); 
+  //Serial.print(gz);
+  //Serial.print(", ");
+  Serial.print(gz_corrected);
   Serial.print(", ");
   Serial.print(intervalTime);
   Serial.print(", ");
-  Serial.print(pos.getX());
-  Serial.print(", ");
-  Serial.print(pos.getY());
-  Serial.print(", ");
+  //Serial.print(pos.getX());
+  //Serial.print(", ");
   Serial.print(heading);
 }
 
@@ -407,7 +360,6 @@ void guide(){
  */
 
 void detect(){
-//  const float US_ROUNDTRIP_CM = 57.0;
   leftDist = sonarLeft.ping();
   centerDist = sonarCenter.ping();
   rightDist = sonarRight.ping();
@@ -457,6 +409,10 @@ void control(){
         motorForward();
         steerRight();
       }
+      else{
+        motorForward();
+        steerLeft();
+      }
     }else if(abs(headingChange) >= DEADBAND / 2){
       //Time to TURN
       if(headingChange < 0){
@@ -471,8 +427,7 @@ void control(){
 }
 
 void loop() {
-  calibrateMag();
-  setWP();
+  calibratempu();
   delay(1000); //give me a second to move my hand
   while(true){
     navigate();

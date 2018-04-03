@@ -380,9 +380,9 @@ void detect() {
 
 const int TURN_DIST = 80; // Distance at which the robot will turn in centimeters
 const int BACKUP_DIST = 35;
-const int SIDE_BACKUP_DIST = 10;
+const int SIDE_BACKUP_DIST = 20;
 bool backingUp = false;
-const long BACKUP_TIME = 1000;
+const long BACKUP_TIME = 750; //1000 was used for low charge
 long timeSpentBacking = 0;
 
 /*
@@ -423,16 +423,14 @@ void control() {
         timeSpentBacking = 0;
         steerStraight();
       }
-    } else if (leftDist < SIDE_BACKUP_DIST){
+    } else if (leftDist < SIDE_BACKUP_DIST && leftDist != 0){
       motorBack();
       steerLeft();
       backingUp = true;
-      timeSpentBacking = BACKUP_TIME / 2;
-    } else if (rightDist < SIDE_BACKUP_DIST){
+    } else if (rightDist < SIDE_BACKUP_DIST && rightDist != 0){
       motorBack();
       steerRight();
       backingUp = true;
-      timeSpentBacking = BACKUP_TIME / 2;
     } else if (centerDist < TURN_DIST && centerDist > BACKUP_DIST) {
       if (rightDist < TURN_DIST && rightDist != 0) {
         if (leftDist < TURN_DIST && leftDist != 0) {

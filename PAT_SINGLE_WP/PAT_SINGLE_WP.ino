@@ -285,8 +285,8 @@ void navigate(){
 
   long gz_corrected = gz - gz_offset;
   
-  float rotation = (intervalTime * gz_corrected / (1000.0 * ROTATION_CONSTANT));
-  heading += rotation;
+  
+  heading -= (intervalTime * gz_corrected / (1000.0 * ROTATION_CONSTANT));
   while(heading < 0) heading += 360;
   while(heading > 360) heading -= 360;
   JVector addVector(((float)intervalTurns * WHEEL_CIRC_CM / 200.0) * sin(heading * PI / 180.0),

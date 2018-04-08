@@ -51,7 +51,6 @@ void setup() {
 }
 
 
-const int WP_LENGTH = 5; //Length of the list of waypoints.
 const float DEADBAND = 15; //degree range for acceptable forward heading.
 //We use a deadband because the steering is only capable of three settings, unlike hobby-grade cars.
 const uint16_t UPPER_THRESHOLD = 500; //thresholds used for the odometer
@@ -72,7 +71,8 @@ ThrottleState throttle = STILL; //current throttle state, beginning at STILL
 JVector pos(0, 0); //current location, beginning at the origin.
 
 //array of waypoints that the robot will travel to. This is not fully implemented.
-JVector waypoints[] = {JVector(0, 0), JVector(0, 2), JVector(2, 2), JVector(2, 0), JVector(0, 0)};
+JVector waypoints[] = {JVector(0, 0), JVector(0, 3), JVector(-3, 3)};
+const int WP_LENGTH = 3; //Length of the list of waypoints.
 
 const int TRIG_LEFT = 9;
 const int ECHO_LEFT = 8;
@@ -379,10 +379,11 @@ void detect() {
 }
 
 const int TURN_DIST = 80; // Distance at which the robot will turn in centimeters
-const int BACKUP_DIST = 35;
+const int BACKUP_DIST = 50;
 const int SIDE_BACKUP_DIST = 20;
+const int SIDE_TURN_DIST = 35;
 bool backingUp = false;
-const long BACKUP_TIME = 750; //1000 was used for low charge
+const long BACKUP_TIME = 500; //1000 was used for low charge
 long timeSpentBacking = 0;
 
 /*
@@ -423,13 +424,18 @@ void control() {
         timeSpentBacking = 0;
         steerStraight();
       }
+    } else if(leftDist < SIDE_TURN_DIST && leftDist >= SIDE_BACKUP_DIST && leftDist != 0) {
+      if(rightDist < SIDE_TURN_DIST) steerRight();
+      else steerStraight();
+    } else if(rightDist < SIDE_TURN_DIST && rightDist >= SIDE_BACKUP_DIST && rightDist != 0){
+      steerLeft();
     } else if (leftDist < SIDE_BACKUP_DIST && leftDist != 0){
       motorBack();
-      steerLeft();
+      steerStraight();
       backingUp = true;
     } else if (rightDist < SIDE_BACKUP_DIST && rightDist != 0){
       motorBack();
-      steerRight();
+      steerStraight();
       backingUp = true;
     } else if (centerDist < TURN_DIST && centerDist > BACKUP_DIST) {
       if (rightDist < TURN_DIST && rightDist != 0) {
